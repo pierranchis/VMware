@@ -1,0 +1,87 @@
+<#
+############################################################################################################
+# Created by pierranchis                            # Description: Deploys VM from template and uses the   #
+# Deploy VM from template                           # customization profile to set VM parameters           #
+# Created:                                          #                                                      #
+#                                                   #                                                      #
+# Revision: 1.1.1 - 11/06/2018                      #                                                      #
+############################################################################################################
+#>
+
+<#----------------------------------- Beginning of Functions -----------------------------------#>
+
+    # Initializing a Countdown Function
+        Function Start-Countdown 
+            {   
+                Param(
+                        [Int32]$Seconds = 30,
+                        [string]$Message = "Pausing for 30 seconds..."
+		              )
+		        ForEach ($Count in (1..$Seconds))
+		              {   
+                        Write-Progress -Id 1 -Activity $Message -Status "Time Left: $Seconds seconds, $($Seconds - $Count)" -PercentComplete (($Count / $Seconds) * 100)
+			            Start-Sleep -Seconds 1
+		              }
+		        Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
+	         }
+
+<#----------------------------------- End of Functions -----------------------------------#>
+
+<#----------------------------------- Beginning of Variables -----------------------------------#>
+
+    $DomainSuffix = 'ABCD\'
+    $vCenterServer = 'vCenterServer'
+    $VMname = Read-Host -Prompt "Enter VM Name"
+    $IPAddress = Read-Host -Prompt "Enter VM IP Address"
+	  $VMDescription = Read-Host -Prompt "Enter VM Description"
+    $Template = 'ABCD.Windows2016.Template'
+    $OSCusSpec = 'Server2016.CustomSpecs'
+    $SubnetMask = 'subnet'
+    $DefaultGateway = 'gateway'
+    $DNS01 = 'dns01'
+    $DNS02 = 'dns02'
+
+    # Determine cluster based on VM naming convention
+    if ($VMname -like "prod*") {$Cluster = "Production"}
+    if ($VMname -like "dev*") {$Cluster = "Development"}
+
+    # Determine Folder Location
+    if ($VMname -like "prod*") {$FolderLocation = "Production"}
+    if ($VMname -like "dev*") {$FolderLocation = "Development"}
+
+    # Find applicable datastore(s) and select the one with the most space free
+    if ($VMname -like "prod*") {$DSname = 'prdsan*'}
+    if ($VMname -like "dev*") {$DSname = 'devsan*'}
+    
+<#----------------------------------- End of Variables -----------------------------------#>
+
+# Prompt the user for Login Credentials
+    Write-Host "READ ME! Authentication: Enter your privileged user account. Example; jdoe" -ForegroundColor Yellow
+        $DomainUser = Read-Host -Prompt "Privileged User Account"     
+        $DomainLogin = $DomainSuffix + $DomainUser    
+    Write-Host "READ ME! Authentication: Enter your privileged user account password." -ForegroundColor Yellow
+        $DomainPassword = Read-Host -AsSecureString "Privileged User Account Password"                
+         
+# Create credential sets                
+    $DomainCredentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $DomainLogin,$DomainPassword
+
+# Connect to vCenter
+    Connect-VIServer -Server $vCenterServer -Credential $DomainCredentials
+    
+# Set the VM IP Address
+    Get-OSCustomizationSpec $OSCusSpec | Get-OSCustomizationNicMapping | Set-OSCustomizationNicMapping -IpMode UseStaticIp -IpAddress $IPAddress -SubnetMask $SubnetMask -DefaultGateway $DefaultGateway -DNS $DNS01,$DNS02
+
+# Select Datastore
+    $Datastore = Get-Datastore -Name $DSname | Sort-Object -Property FreeSpaceGB -Descending | Select -First 1
+
+# Deploy Virtual Machine and remove temp custom spec
+    New-VM -Name $VMName -Template $Template -ResourcePool $Cluster -location $FolderLocation -DiskStorageFormat thin -Datastore $Datastore -OSCustomizationSpec $OSCusSpec
+	
+# Waiting for 30 Seconds
+    Start-Countdown -Seconds 30
+
+# Set VM Notes 
+    Set-vm -vm $VMName -Notes $VMDescription -Confirm:$false
+
+#Start the VM to continue the customization process
+    Start-VM -VM $VMname
