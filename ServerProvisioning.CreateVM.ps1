@@ -21,7 +21,16 @@
     $VMDescription = Read-Host -Prompt "Enter VM Description"
 
 # Set the VM IP Address
-    Get-OSCustomizationSpec $OSCusSpec | Get-OSCustomizationNicMapping | Set-OSCustomizationNicMapping -IpMode UseStaticIp -IpAddress $IPAddress -SubnetMask $SubnetMask -DefaultGateway $DefaultGateway -DNS $DNS01,$DNS02
+    $SOSCM_Params = @{
+        IpMode = 'UseStaticIp'
+        IpAddress = $IPAddress
+        SubnetMask = $SubnetMask
+        DefaultGateway = $DefaultGateway
+        DNS = $DNS01,$DNS02
+                     }
+    Get-OSCustomizationSpec $OSCusSpec |
+        Get-OSCustomizationNicMapping |
+        Set-OSCustomizationNicMapping @SOSCM_Params
 
 # VM Placement conditions (cluster, folder location, and datastore)
     if ($VMname -like $ProdVMConvention) 
