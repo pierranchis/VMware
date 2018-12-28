@@ -22,7 +22,7 @@ $DevVMConvention = "ABCDev*"
 $ProdCluster = "Production"
 $DevCluster = "Development"
 
-#vCenter VM Folders
+# vCenter VM Folders
 $ProdFolder = "Prod"
 $DevFolder = "Dev"
 
